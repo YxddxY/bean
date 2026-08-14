@@ -18,6 +18,13 @@ from bead_colors import get_palette_names, DEFAULT_PALETTE
 # 支持的图片扩展名
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tiff", ".tif"}
 
+# 色卡默认图纸大小（宽 x 高，颗数）
+PALETTE_DEFAULT_SIZE = {
+    "Mard标准221色": (58, 58),
+    "Mard完整291色": (58, 58),
+    "奇象巡展": (24, 24),
+}
+
 # 主题配色
 COLORS = {
     "bg": "#1e1e2e",
@@ -132,11 +139,12 @@ class BeadPatternGUI:
             state="readonly"
         )
         self.palette_combo.set(DEFAULT_PALETTE)
+        self.palette_combo.configure(command=self._on_palette_change)
         self.palette_combo.pack()
 
-        self._param_field(param_row, "宽度 (颗)", "58", 70)
-        self._param_field(param_row, "高度 (颗)", "58", 70)
-        self._param_field(param_row, "格子大小 (px)", "28", 90)
+        self.width_entry = self._param_field(param_row, "宽度 (颗)", "58", 70)
+        self.height_entry = self._param_field(param_row, "高度 (颗)", "58", 70)
+        self.bead_size_entry = self._param_field(param_row, "格子大小 (px)", "28", 90)
 
         # 生成按钮
         self.generate_btn = ctk.CTkButton(
@@ -326,15 +334,24 @@ class BeadPatternGUI:
             self.output_entry.delete(0, "end")
             self.output_entry.insert(0, path)
 
+    def _on_palette_change(self, palette_name):
+        """色卡切换时，自动更新默认图纸尺寸"""
+        default_w, default_h = PALETTE_DEFAULT_SIZE.get(palette_name, (58, 58))
+        self.width_entry.delete(0, "end")
+        self.width_entry.insert(0, str(default_w))
+        self.height_entry.delete(0, "end")
+        self.height_entry.insert(0, str(default_h))
+        self._status(f"已切换色卡: {palette_name}（默认 {default_w}×{default_h}）")
+
     def _on_generate(self):
         img_path = self.input_entry.get().strip()
         if not img_path or not Path(img_path).exists():
             self._show_msg("错误", "请先选择有效的输入图片！", "error")
             return
         try:
-            max_w = int(self.width_entry.winfo_children()[1].get())
-            max_h = int(self.height_entry.winfo_children()[1].get())
-            bead_size = int(self.bead_size_entry.winfo_children()[1].get())
+            max_w = int(self.width_entry.get())
+            max_h = int(self.height_entry.get())
+            bead_size = int(self.bead_size_entry.get())
         except (ValueError, IndexError):
             self._show_msg("错误", "参数必须为整数！", "error")
             return
