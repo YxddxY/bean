@@ -1,5 +1,10 @@
 # 拼豆图纸生成器
 
+[![GitHub Release](https://img.shields.io/github/v/release/YxddxY/bean)](https://github.com/YxddxY/bean/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/YxddxY/bean/total)](https://github.com/YxddxY/bean/releases/latest)
+
+**[下载可执行文件](https://github.com/YxddxY/bean/releases/latest/download/拼豆图纸生成器.exe)** — 无需安装 Python，直接运行。
+
 将任意图片转换为拼豆图纸，输出带颜色编号的网格图案及用料统计。支持命令行和图形界面两种使用方式。
 
 ## 功能特性
