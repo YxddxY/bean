@@ -10,7 +10,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from bead_colors import BEAD_COLORS
+from bead_colors import COLOR_PALETTES, get_colors, get_palette_names, DEFAULT_PALETTE
 
 
 # ---------------------------------------------------------------------------
@@ -52,16 +52,26 @@ def delta_e(lab1, lab2):
     return math.sqrt(sum((x - y) ** 2 for x, y in zip(lab1, lab2)))
 
 
-# 预计算所有拼豆颜色的 Lab 值，避免重复转换
-_BEAD_LAB_CACHE = [(name, rgb_to_lab(rgb)) for name, rgb in BEAD_COLORS]
+# Lab 缓存：按色卡名称缓存，避免重复转换
+_LAB_CACHE_MAP = {}
 
 
-def find_nearest_bead_color(pixel_rgb):
+def _get_lab_cache(palette_name=None):
+    """获取指定色卡的 Lab 缓存（懒加载）"""
+    if palette_name is None:
+        palette_name = DEFAULT_PALETTE
+    if palette_name not in _LAB_CACHE_MAP:
+        colors = get_colors(palette_name)
+        _LAB_CACHE_MAP[palette_name] = [(name, rgb_to_lab(rgb)) for name, rgb in colors]
+    return _LAB_CACHE_MAP[palette_name]
+
+
+def find_nearest_bead_color(pixel_rgb, palette_name=None):
     """找到与给定 RGB 最接近的拼豆颜色（基于 CIE Lab ΔE 色差）"""
     pixel_lab = rgb_to_lab(pixel_rgb)
     best = None
     best_dist = float("inf")
-    for name, lab in _BEAD_LAB_CACHE:
+    for name, lab in _get_lab_cache(palette_name):
         dist = delta_e(pixel_lab, lab)
         if dist < best_dist:
             best_dist = dist
@@ -82,7 +92,7 @@ def load_and_resize(image_path, max_width, max_height):
     return img
 
 
-def image_to_bead_grid(img):
+def image_to_bead_grid(img, palette_name=None):
     """将图片的每个像素映射到最近的拼豆颜色，返回颜色名称二维列表"""
     w, h = img.size
     grid = []
@@ -90,7 +100,7 @@ def image_to_bead_grid(img):
         row = []
         for x in range(w):
             pixel = img.getpixel((x, y))
-            row.append(find_nearest_bead_color(pixel))
+            row.append(find_nearest_bead_color(pixel, palette_name))
         grid.append(row)
     return grid
 
@@ -99,7 +109,7 @@ def image_to_bead_grid(img):
 # 图纸绘制
 # ---------------------------------------------------------------------------
 
-def draw_bead_pattern(grid, bead_size=28, output_path="bead_pattern.png"):
+def draw_bead_pattern(grid, bead_size=28, output_path="bead_pattern.png", palette_name=None):
     """
     绘制拼豆图纸：
     - 每个格子画一个彩色圆点
@@ -110,8 +120,8 @@ def draw_bead_pattern(grid, bead_size=28, output_path="bead_pattern.png"):
     rows = len(grid)
     cols = len(grid[0]) if rows else 0
 
-    # 颜色名称 -> RGB 映射
-    color_map = {name: rgb for name, rgb in BEAD_COLORS}
+    # 颜色名称 -> RGB 映射（根据当前色卡）
+    color_map = {name: rgb for name, rgb in get_colors(palette_name)}
 
     # 统计每种颜色的用量
     counter = Counter()
@@ -293,7 +303,8 @@ def print_statistics(grid):
 # 主流程
 # ---------------------------------------------------------------------------
 
-def generate_bead_pattern(image_path, max_width=58, max_height=58, output_path=None):
+def generate_bead_pattern(image_path, max_width=58, max_height=58, output_path=None,
+                          palette_name=None):
     """
     主函数：从图片生成拼豆图纸
 
@@ -302,7 +313,11 @@ def generate_bead_pattern(image_path, max_width=58, max_height=58, output_path=N
         max_width:    拼豆板最大宽度（颗数），默认 58（约两块 29 格拼豆板）
         max_height:   拼豆板最大高度（颗数），默认 58
         output_path:  输出图片路径，默认为 输入文件名_bead.png
+        palette_name: 色卡名称，默认为 Mard标准221色
     """
+    if palette_name is None:
+        palette_name = DEFAULT_PALETTE
+
     image_path = Path(image_path)
     if not image_path.exists():
         print(f"错误: 找不到图片文件 {image_path}")
@@ -312,6 +327,7 @@ def generate_bead_pattern(image_path, max_width=58, max_height=58, output_path=N
         output_path = str(image_path.parent / f"{image_path.stem}_bead.png")
 
     print(f"正在处理: {image_path}")
+    print(f"色卡: {palette_name}")
     print(f"最大拼豆板尺寸: {max_width} × {max_height}")
 
     # 1. 加载并缩放图片
@@ -319,10 +335,10 @@ def generate_bead_pattern(image_path, max_width=58, max_height=58, output_path=N
     print(f"缩放后网格尺寸: {img.size[0]} × {img.size[1]}")
 
     # 2. 像素 -> 拼豆颜色映射
-    grid = image_to_bead_grid(img)
+    grid = image_to_bead_grid(img, palette_name)
 
     # 3. 绘制图纸
-    draw_bead_pattern(grid, bead_size=28, output_path=output_path)
+    draw_bead_pattern(grid, bead_size=28, output_path=output_path, palette_name=palette_name)
 
     # 4. 打印统计
     print_statistics(grid)
@@ -344,9 +360,11 @@ def main():
     parser.add_argument("-W", "--max-width", type=int, default=58, help="最大宽度（颗数），默认 58")
     parser.add_argument("-H", "--max-height", type=int, default=58, help="最大高度（颗数），默认 58")
     parser.add_argument("-o", "--output", default=None, help="输出图片路径")
+    parser.add_argument("-p", "--palette", default=None,
+                        help=f"色卡名称，可选: {', '.join(get_palette_names())}，默认 {DEFAULT_PALETTE}")
 
     args = parser.parse_args()
-    generate_bead_pattern(args.image, args.max_width, args.max_height, args.output)
+    generate_bead_pattern(args.image, args.max_width, args.max_height, args.output, args.palette)
 
 
 if __name__ == "__main__":

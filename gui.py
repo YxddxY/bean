@@ -13,6 +13,7 @@ import windnd
 from PIL import Image, ImageTk
 
 from main import load_and_resize, image_to_bead_grid, draw_bead_pattern
+from bead_colors import get_palette_names, DEFAULT_PALETTE
 
 # 支持的图片扩展名
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tiff", ".tif"}
@@ -117,6 +118,21 @@ class BeadPatternGUI:
 
         param_row = ctk.CTkFrame(param_card, fg_color="transparent", corner_radius=0)
         param_row.pack(fill="x", padx=16, pady=12)
+
+        # 色卡选择下拉框
+        palette_grp = ctk.CTkFrame(param_row, fg_color="transparent", corner_radius=0)
+        palette_grp.pack(side="left", padx=(0, 20))
+        ctk.CTkLabel(palette_grp, text="色卡", font=ctk.CTkFont("Microsoft YaHei UI", 13),
+                      text_color=COLORS["text_dim"]).pack(anchor="w", pady=(0, 4))
+        self.palette_combo = ctk.CTkComboBox(
+            palette_grp, values=get_palette_names(), width=140, height=36, corner_radius=8,
+            font=ctk.CTkFont("Microsoft YaHei UI", 13),
+            fg_color=COLORS["input_bg"], border_color=COLORS["input_border"],
+            border_width=1, dropdown_fg_color=COLORS["card"],
+            state="readonly"
+        )
+        self.palette_combo.set(DEFAULT_PALETTE)
+        self.palette_combo.pack()
 
         self._param_field(param_row, "宽度 (颗)", "58", 70)
         self._param_field(param_row, "高度 (颗)", "58", 70)
@@ -324,6 +340,7 @@ class BeadPatternGUI:
             return
 
         output = self.output_entry.get().strip() or None
+        palette = self.palette_combo.get()
 
         self.generate_btn.configure(state="disabled")
         self.progress.configure(mode="indeterminate")
@@ -335,16 +352,16 @@ class BeadPatternGUI:
         self.canvas.delete("all")
 
         thread = threading.Thread(target=self._generate_worker,
-                                  args=(img_path, max_w, max_h, bead_size, output), daemon=True)
+                                  args=(img_path, max_w, max_h, bead_size, output, palette), daemon=True)
         thread.start()
 
-    def _generate_worker(self, img_path, max_w, max_h, bead_size, output):
+    def _generate_worker(self, img_path, max_w, max_h, bead_size, output, palette):
         try:
             img = load_and_resize(img_path, max_w, max_h)
-            grid = image_to_bead_grid(img)
+            grid = image_to_bead_grid(img, palette)
             if output is None:
                 output = str(Path(img_path).parent / f"{Path(img_path).stem}_bead.png")
-            draw_bead_pattern(grid, bead_size=bead_size, output_path=output)
+            draw_bead_pattern(grid, bead_size=bead_size, output_path=output, palette_name=palette)
 
             counter = Counter()
             for row in grid:
